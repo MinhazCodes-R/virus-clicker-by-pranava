@@ -4,28 +4,82 @@ import Virus from './components/Virus';
 import Stats from './components/Stats';
 import Upgrades from './components/Upgrades';
 
+// Simple cookie helpers for persistence
+function setCookie(name, value, days = 365) {
+  try {
+    const expires = new Date(Date.now() + days * 864e5).toUTCString();
+    document.cookie = `${name}=${encodeURIComponent(String(value))}; expires=${expires}; path=/`;
+  } catch (e) {
+    // If cookies fail (e.g., disabled), silently ignore — app still works in-memory
+    console.warn('setCookie failed', e);
+  }
+}
+
+function getCookie(name) {
+  try {
+    const match = document.cookie.split('; ').find(row => row.startsWith(name + '='));
+    if (!match) return null;
+    return decodeURIComponent(match.split('=')[1]);
+  } catch (e) {
+    console.warn('getCookie failed', e);
+    return null;
+  }
+}
+
 function App() {
-  // Game state
-  const [viruses, setViruses] = useState(0);
-  const [virusesPerSecond, setVirusesPerSecond] = useState(0);
-  const [clickPower, setClickPower] = useState(1);
+  // Game state (initialize from cookies when possible)
+  const [viruses, setViruses] = useState(() => {
+    const v = getCookie('viruses');
+    return v !== null ? parseFloat(v) || 0 : 0;
+  });
+
+  const [virusesPerSecond, setVirusesPerSecond] = useState(() => {
+    const v = getCookie('virusesPerSecond');
+    return v !== null ? parseFloat(v) || 0 : 0;
+  });
+
+  const [clickPower, setClickPower] = useState(() => {
+    const v = getCookie('clickPower');
+    return v !== null ? parseFloat(v) || 1 : 1;
+  });
   
   // Upgrades state - themed around immune system and medical science
-  const [upgrades, setUpgrades] = useState({
-    whiteBloodCells: { count: 0, cost: 10, production: 0.1, name: "White Blood Cell", description: "Produces 0.1 viruses/sec" },
-    antibodies: { count: 0, cost: 50, production: 0.5, name: "Antibody", description: "Produces 0.5 viruses/sec" },
-    tCells: { count: 0, cost: 200, production: 2, name: "T-Cell", description: "Produces 2 viruses/sec" },
-    vaccines: { count: 0, cost: 1000, production: 10, name: "Vaccine Lab", description: "Produces 10 viruses/sec" },
-    researchLab: { count: 0, cost: 5000, production: 50, name: "Research Lab", description: "Produces 50 viruses/sec" },
-    hospital: { count: 0, cost: 20000, production: 200, name: "Hospital", description: "Produces 200 viruses/sec" }
+  // Upgrades - try to load saved upgrades from cookie (small JSON)
+  const [upgrades, setUpgrades] = useState(() => {
+    const saved = getCookie('upgrades');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        console.warn('Failed to parse upgrades cookie, using defaults', e);
+      }
+    }
+    return {
+      whiteBloodCells: { count: 0, cost: 10, production: 0.1, name: "White Blood Cell", description: "Produces 0.1 viruses/sec" },
+      antibodies: { count: 0, cost: 50, production: 0.5, name: "Antibody", description: "Produces 0.5 viruses/sec" },
+      tCells: { count: 0, cost: 200, production: 2, name: "T-Cell", description: "Produces 2 viruses/sec" },
+      vaccines: { count: 0, cost: 1000, production: 10, name: "Vaccine Lab", description: "Produces 10 viruses/sec" },
+      researchLab: { count: 0, cost: 5000, production: 50, name: "Research Lab", description: "Produces 50 viruses/sec" },
+      hospital: { count: 0, cost: 20000, production: 200, name: "Hospital", description: "Produces 200 viruses/sec" }
+    };
   });
 
   // Click power upgrades
-  const [clickUpgrades, setClickUpgrades] = useState({
-    microscope: { owned: false, cost: 100, power: 1, name: "Microscope", description: "+1 virus per click" },
-    petriDish: { owned: false, cost: 500, power: 5, name: "Petri Dish", description: "+5 viruses per click" },
-    centrifuge: { owned: false, cost: 2500, power: 10, name: "Centrifuge", description: "+10 viruses per click" },
-    electronMicroscope: { owned: false, cost: 10000, power: 25, name: "Electron Microscope", description: "+25 viruses per click" }
+  const [clickUpgrades, setClickUpgrades] = useState(() => {
+    const saved = getCookie('clickUpgrades');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        console.warn('Failed to parse clickUpgrades cookie, using defaults', e);
+      }
+    }
+    return {
+      microscope: { owned: false, cost: 100, power: 1, name: "Microscope", description: "+1 virus per click" },
+      petriDish: { owned: false, cost: 500, power: 5, name: "Petri Dish", description: "+5 viruses per click" },
+      centrifuge: { owned: false, cost: 2500, power: 10, name: "Centrifuge", description: "+10 viruses per click" },
+      electronMicroscope: { owned: false, cost: 10000, power: 25, name: "Electron Microscope", description: "+25 viruses per click" }
+    };
   });
 
   // Handle virus click
@@ -80,6 +134,35 @@ function App() {
     }, 100);
     return () => clearInterval(interval);
   }, [virusesPerSecond]);
+
+  // Persist key pieces of state in cookies
+  useEffect(() => {
+    setCookie('viruses', viruses, 365);
+  }, [viruses]);
+
+  useEffect(() => {
+    setCookie('virusesPerSecond', virusesPerSecond, 365);
+  }, [virusesPerSecond]);
+
+  useEffect(() => {
+    setCookie('clickPower', clickPower, 365);
+  }, [clickPower]);
+
+  useEffect(() => {
+    try {
+      setCookie('upgrades', JSON.stringify(upgrades), 365);
+    } catch (e) {
+      console.warn('Failed to stringify upgrades for cookie', e);
+    }
+  }, [upgrades]);
+
+  useEffect(() => {
+    try {
+      setCookie('clickUpgrades', JSON.stringify(clickUpgrades), 365);
+    } catch (e) {
+      console.warn('Failed to stringify clickUpgrades for cookie', e);
+    }
+  }, [clickUpgrades]);
 
   return (
     <div className="App">
